@@ -55,6 +55,10 @@ public class Vector2 {
     return magnitude < 1e-3 ? this : times(1 / magnitude());
   }
 
+  public Vector2 rescale(double newMagnitude) {
+    return normalize().times(newMagnitude);
+  }
+
   public double angle() {
     return Math.atan2(y, x);
   }

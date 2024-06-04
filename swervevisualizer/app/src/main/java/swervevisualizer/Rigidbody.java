@@ -1,14 +1,13 @@
 package swervevisualizer;
 
 import javafx.scene.canvas.GraphicsContext;
-import swervevisualizer.Constants.Drivebase;
 
 /**
  * Owns pose (position + heading) of object that
  * is affected by inertia/physics, approximating
  * a point particle. Handles basic physics simulation.
  */
-public class Rigidbody extends Entity {
+public class Rigidbody {
 
   private Vector2 position;
   private double headingRadians;
@@ -22,13 +21,11 @@ public class Rigidbody extends Entity {
   private double angularVelocity = 0;
 
   public Rigidbody(
-    Entity parent,
     Vector2 position,
     double headingRadians,
     double mass,
     double momentOfInertia
   ) {
-    super(parent);
     this.position = position;
     this.headingRadians = headingRadians;
     this.mass = mass;
@@ -47,19 +44,20 @@ public class Rigidbody extends Entity {
     this.position = position;
   }
 
-  @Override
-  public void updateLocal(double dt) {
+  public void update(double dt) {
     position = position.plus(velocity.times(dt));
     headingRadians =
       Utils.angleModulusRadians(headingRadians + angularVelocity * dt);
+  }
 
+  public void applyFriction(double friction, double dt) {
     // The "physics" are pretty crude: ex. FRICTION is just
     // a dampening term that slows the robot over time.
     // To be more realistic, you'd calculate this based on the momentum
     // of the wheel, and the internal FRICTION/dampening would be from the gearbox, back-EMF,
     // and the contact between the tread and the floor.
-    angularVelocity -= Drivebase.FRICTION * angularVelocity * dt;
-    velocity = velocity.plus(velocity.times(-Drivebase.FRICTION * dt));
+    angularVelocity -= friction * angularVelocity * dt;
+    velocity = velocity.plus(velocity.times(-friction * dt));
   }
 
   public void applyImpulse(Vector2 force, double torque, double dt) {
@@ -94,7 +92,4 @@ public class Rigidbody extends Entity {
   public Vector2 getPosition() {
     return position;
   }
-
-  @Override
-  protected void drawLocal(GraphicsContext ctx) {}
 }

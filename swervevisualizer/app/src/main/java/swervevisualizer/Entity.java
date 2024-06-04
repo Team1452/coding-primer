@@ -28,9 +28,55 @@ import javafx.scene.canvas.GraphicsContext;
  */
 public abstract class Entity {
 
+  public class Rotation {
+
+    double radians;
+
+    public Rotation(double radians) {
+      this.radians = radians;
+    }
+
+    public double getRadians() {
+      return radians;
+    }
+
+    public double getDegrees() {
+      return Math.toDegrees(radians);
+    }
+  }
+
+  public class Transform {
+
+    public Rotation rotation;
+    public Vector2 translation;
+
+    public void setRotation(Rotation rotation) {
+      this.rotation = rotation;
+    }
+
+    public void setTranslation(Vector2 translation) {
+      this.translation = translation;
+    }
+
+    public Rotation getRotation() {
+      return rotation;
+    }
+
+    public Vector2 getTranslation() {
+      return translation;
+    }
+
+    public void transform(GraphicsContext ctx) {
+      ctx.rotate(rotation.getDegrees());
+      ctx.translate(translation.x, translation.y);
+    }
+  }
+
   Entity parent;
   List<Entity> children = new ArrayList<>();
   private boolean active = true;
+
+  public abstract Transform getTransform();
 
   public boolean isActive() {
     return active;

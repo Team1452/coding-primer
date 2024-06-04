@@ -82,6 +82,7 @@ public class SwerveModule {
     // so we don't rotate it here.
     double torque = modulePosition.crossZ(velocity); // Torque = r x F
     rigidbody.applyImpulse(absoluteCurrentVelocity, torque, dt);
+    rigidbody.applyFriction(Drivebase.FRICTION, dt);
   }
 
   public void draw(GraphicsContext ctx, Vector2 modulePosition) {

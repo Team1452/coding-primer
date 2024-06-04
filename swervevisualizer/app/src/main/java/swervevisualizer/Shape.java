@@ -1,56 +1,64 @@
 package swervevisualizer;
 
+import java.util.List;
+import javafx.scene.canvas.GraphicsContext;
+
 /**
  * A shape has a boundary defined by an Edges object,
  * and a hit() method that returns whether a point is inside it.
  */
 public abstract class Shape {
 
+  /** List of points defining a closed surface. */
   public static class Edges extends Shape {
 
-    private final double[] xPoints, yPoints;
-    private final int nPoints;
+    private final List<Vector2> points;
+    private final int n;
 
-    public Edges(double[] xPoints, double[] yPoints, int nPoints) {
-      this.xPoints = xPoints;
-      this.yPoints = yPoints;
-      this.nPoints = nPoints;
-    }
-
-    public double[] xPoints() {
-      return xPoints;
-    }
-
-    public double[] yPoints() {
-      return yPoints;
+    public Edges(List<Vector2> points) {
+      this.points = points;
+      this.n = points.size();
     }
 
     public int n() {
-      return nPoints;
+      return n;
     }
 
-    public double x(int i) {
-      return xPoints[i % nPoints];
+    public Vector2 point(int i) {
+      return points.get(i % n);
     }
 
-    public double y(int i) {
-      return yPoints[i % nPoints];
+    public void stroke(GraphicsContext ctx) {
+      ctx.beginPath();
+      for (int i = 0; i < n + 1; i++) {
+        Vector2 point = point(i);
+        if (i == 0) ctx.moveTo(point.x, point.y); else ctx.lineTo(
+          point.x,
+          point.y
+        );
+      }
+      ctx.stroke();
     }
 
-    public boolean intersects(Edges other) {
+    public boolean intersects(Edges other, double otherX, double otherY) {
+      Vector2 localPosition = new Vector2(otherX, otherY);
+
       // Naively iterates through all combinations of line-line pairs
       // to see if any intersect each other.
-      for (int i = 0; i < nPoints; i++) {
-        for (int j = 0; j < other.nPoints; j++) {
-          double a = x(i), b = y(i), c = x(i + 1), d = y(i + 1);
-          double p = other.x(j), q = other.y(j), r = other.x(
-            j + 1
-          ), s = other.y(j + 1);
-          if (linesIntersect(a, b, c, d, p, q, r, s)) {
+      for (int i = 0; i < n; i++) {
+        for (int j = 0; j < other.n; j++) {
+          Vector2 selfStart = point(i);
+          Vector2 selfEnd = point(i + 1);
+
+          Vector2 otherStart = other.point(j).plus(localPosition);
+          Vector2 otherEnd = other.point(j + 1).plus(localPosition);
+
+          if (linesIntersect(selfStart, selfEnd, otherStart, otherEnd)) {
             return true;
           }
         }
       }
+
       return false;
     }
 
@@ -74,25 +82,25 @@ public abstract class Shape {
   /** Returns the edges that define the shape. */
   public abstract Edges edges();
 
-  public boolean intersects(
-    Shape other,
-    double selfX,
-    double selfY,
-    double otherX,
-    double otherY
-  ) {
+  public boolean intersects(Shape other, double localX, double localY) {
     // If either the edges of the two shapes intersect,
     // or the center of the first shape is inside the other,
     // the shapes intersect. (I think this is true?)
     // We find the latter by transforming the center of the first shape
     // to be relative to the center of the second and calling .hit().
-    return (
-      edges().intersects(other.edges()) ||
-      other.hit(selfX - otherX, selfY - otherY)
-    );
+    boolean edgesIntersect = edges().intersects(other.edges(), localX, localY);
+    boolean centerInside = hit(localX, localY);
+    return edgesIntersect || centerInside;
   }
 
-  /** Returns whether two lines, (a, b) -> (c, d) and (p, q) -> (r, q), intersect.  */
+  /** Returns whether two lines, (a, b) -> (c, d) and (p, q) -> (r, q), intersect.
+   * Where does it come from? Linear algebra! You can define a matrix that maps
+   * "line space" to "world space", then apply it to the offset of one from another
+   * to get the intersection point (if it exists) in "line space". If its two new
+   * line coordinates, lambda and gamma, are actually on both line segments
+   * (both are between 0 and 1) then the intersection point is on both line segments.
+   * I have a little Desmos for this: https://www.desmos.com/calculator/8em6l1t2qo.
+   */
   private static boolean linesIntersect(
     double a,
     double b,
@@ -103,13 +111,32 @@ public abstract class Shape {
     double r,
     double s
   ) {
-    double det = (a - c) * (q - s) - (b - d) * (p - r);
+    double det = (c - a) * (s - q) - (r - p) * (d - b);
     if (det == 0) {
       return false;
     } else {
-      double lambda = (-q * r + b * (r - p) + a * (q - s) + p * s) / det;
-      return 0 <= lambda && lambda <= 1;
+      double lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
+      double gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
+      return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
     }
+  }
+
+  private static boolean linesIntersect(
+    Vector2 start0,
+    Vector2 end0,
+    Vector2 start1,
+    Vector2 end1
+  ) {
+    return linesIntersect(
+      start0.x,
+      start0.y,
+      end0.x,
+      end0.y,
+      start1.x,
+      start1.y,
+      end1.x,
+      end1.y
+    );
   }
 
   public static class Rectangle extends Shape {
@@ -127,9 +154,12 @@ public abstract class Shape {
       if (edges == null) {
         edges =
           new Edges(
-            new double[] { -width / 2, width / 2, width / 2, -width / 2 },
-            new double[] { height / 2, height / 2, -height / 2, -height / 2 },
-            4
+            List.of(
+              new Vector2(-width / 2, height / 2),
+              new Vector2(width / 2, height / 2),
+              new Vector2(width / 2, -height / 2),
+              new Vector2(-width / 2, -height / 2)
+            )
           );
       }
       return edges;
@@ -137,7 +167,7 @@ public abstract class Shape {
 
     @Override
     public boolean hit(double localX, double localY) {
-      return Math.abs(localX) / 2 <= width && Math.abs(localY) / 2 <= height;
+      return (Math.abs(localX) <= width / 2 && Math.abs(localY) <= height / 2);
     }
   }
 
@@ -145,8 +175,8 @@ public abstract class Shape {
 
     private final Edges edges;
 
-    public Polygon(double[] xPoints, double[] yPoints, int nPoints) {
-      edges = new Edges(xPoints, yPoints, nPoints);
+    public Polygon(Edges edges) {
+      this.edges = edges;
     }
 
     @Override
@@ -156,27 +186,31 @@ public abstract class Shape {
 
     @Override
     public boolean hit(double localX, double localY) {
-      // One way of checking whether a point is inside a polygon
-      // is to take a line which starts anywhere outside of the polygon
-      // and ends at the point, and count how many edges the line intersects.
-      // If the line intersects an even number of edges, the point is outside,
-      // otherwise is inside.
-      double a = localX - 1000, b = localY - 1000, c = localX, d = localY;
+      /** One way of checking whether a point is inside a polygon
+       * is to take a line (a "ray", like a ray of light) which starts
+       * anywhere outside of the polygon and ends at that point, and count
+       * how many edges the line intersects. If it intersects an even number
+       * of edges, it has moved-in-then-moved-out some number of times.
+       * If odd, then eventually it moved in but never moved out, and the
+       * point must be inside the polygon.
+       * https://en.wikipedia.org/wiki/Point_in_polygon
+       */
+      Vector2 rayStart = new Vector2(localX - 1000, localY - 1000);
+      Vector2 rayEnd = new Vector2(localX, localY);
 
       int hits = 0;
 
-      for (int i = 0; i < edges.nPoints; i++) {
-        double p = edges.x(i), q = edges.y(i), r = edges.x(i + 1), s = edges.y(
-          i + 1
-        );
-        boolean intersect = linesIntersect(a, b, c, d, p, q, r, s);
+      for (int i = 0; i < edges.n; i++) {
+        Vector2 start = edges.point(i), end = edges.point(i + 1);
+        boolean intersect = linesIntersect(rayStart, rayEnd, start, end);
+
         if (intersect) {
           hits += 1;
         }
       }
 
-      boolean evenNumberOfHits = hits % 2 == 0;
-      return evenNumberOfHits;
+      boolean oddNumberOfHits = hits % 2 == 1;
+      return oddNumberOfHits;
     }
   }
 }

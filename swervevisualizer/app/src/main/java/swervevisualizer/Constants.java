@@ -18,9 +18,9 @@ public class Constants {
 
   public static class Drivebase {
 
-    public static final double MAX_SPEED_METERS_PER_SECOND = 3.0;
+    public static final double MAX_SPEED_METERS_PER_SECOND = 20;
     public static final double MAX_ANGULAR_SPEED_RADIANS_PER_SECOND = Math.toRadians(
-      45
+      1000
     );
 
     public static final double ALIGN_IMPORTANCE = 50;
@@ -29,7 +29,7 @@ public class Constants {
     public static final double massKg = 5;
     public static final double trackMeters = 0.7;
     public static final double wheelbaseMeters = 0.7;
-    public static final double momentOfInertia = 1;
+    public static final double momentOfInertia = 2;
 
     // Taken from https://www.swervedrivespecialties.com/products/mk4i-swerve-module?variant=39598777172081
     public static final double steeringGearRatio = 1.0 / (150.0 / 7.0);

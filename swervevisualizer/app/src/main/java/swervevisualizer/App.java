@@ -3,6 +3,7 @@ package swervevisualizer;
 import static swervevisualizer.Constants.*;
 
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
@@ -14,19 +15,32 @@ import javafx.scene.input.KeyEvent;
 import javafx.stage.Stage;
 import swervevisualizer.Constants.Drivebase;
 import swervevisualizer.Constants.Field;
+import swervevisualizer.asteroids.Asteroids;
 
 public class App extends Application {
 
   private static final double secondsPerUpdate = 1 / 60;
 
-  private Swerve swerve = new Swerve(null);
-  private Asteroids asteroids = new Asteroids(null);
+  private Swerve swerve = new Swerve();
+
+  // Asteroids are toggleable, so at each tick
+  // we either have and work with an existing Asteroids object,
+  // or we don't.
+  private Optional<Asteroids> asteroids = Optional.of(new Asteroids());
+
   private GraphicsContext ctx;
   private CheckBox fieldOrientedCheckbox = new CheckBox("Field oriented?") {
     {
       setLayoutX(10);
       setLayoutY(70);
-      selectedProperty().set(true);
+      setSelected(true);
+    }
+  };
+  private CheckBox asteroidsCheckbox = new CheckBox("Asteroids!") {
+    {
+      setLayoutX(10);
+      setLayoutY(90);
+      setSelected(true);
     }
   };
 
@@ -37,7 +51,7 @@ public class App extends Application {
     return heldKeys.contains(key);
   }
 
-  public void processInputs() {
+  public void drive() {
     // Process inputs, then update swerve
     Vector2 targetVelocity = new Vector2(0, 0);
 
@@ -60,12 +74,30 @@ public class App extends Application {
     swerve.drive(targetVelocity, targetAngularVelocity, fieldOriented);
   }
 
-  private void tick(double dt) {
-    // Process inputs, then run update step.
-    processInputs();
+  private void update(double dt) {
+    drive();
+    asteroidsShoot(dt);
+
     swerve.update(dt);
 
-    //// Draw scene!
+    boolean enableAsteroids = asteroidsCheckbox.selectedProperty().get();
+    if (enableAsteroids) {
+      if (asteroids.isEmpty()) {
+        asteroids = Optional.of(new Asteroids());
+      }
+    } else {
+      if (asteroids.isPresent()) {
+        asteroids = Optional.empty();
+      }
+    }
+
+    if (asteroids.isPresent()) {
+      asteroids.get().update(dt);
+    }
+  }
+
+  private void draw() {
+    /** Draw field objects */
     ctx.save();
 
     // Here we construct our "world space".
@@ -82,6 +114,10 @@ public class App extends Application {
     ctx.clearRect(0, 0, Field.WIDTH_METERS, Field.HEIGHT_METERS);
 
     swerve.draw(ctx);
+
+    if (asteroids.isPresent()) {
+      asteroids.get().draw(ctx);
+    }
 
     ctx.restore();
 
@@ -108,6 +144,11 @@ public class App extends Application {
     );
   }
 
+  private void tick(double dt) {
+    update(dt);
+    draw();
+  }
+
   public void start(Stage stage) {
     // Set up window, canvas/drawing context
     stage.setTitle("Swerve Visualizer");
@@ -115,15 +156,15 @@ public class App extends Application {
     Canvas canvas = new Canvas();
 
     canvas.setWidth(Constants.SCREEN_WIDTH);
-    canvas.setHeight(Constants.screenHeight);
+    canvas.setHeight(Constants.SCREEN_HEIGHT);
 
     ctx = canvas.getGraphicsContext2D();
 
-    Group group = new Group(canvas, fieldOrientedCheckbox);
+    Group group = new Group(canvas, fieldOrientedCheckbox, asteroidsCheckbox);
     Scene scene = new Scene(
       group,
       Constants.SCREEN_WIDTH,
-      Constants.screenHeight
+      Constants.SCREEN_HEIGHT
     );
 
     stage.setScene(scene);
@@ -146,9 +187,16 @@ public class App extends Application {
 
     // Schedule game loop to run every frame
     AnimationTimer loop = new AnimationTimer() {
-      double lastCallTime = 0;
+      boolean calledYet = false;
+      double lastCallTime;
 
       public void handle(long now) {
+        if (!calledYet) {
+          calledYet = true;
+          lastCallTime = now;
+          return;
+        }
+
         double secondsElapsed = (now - lastCallTime) / 1e9;
         if (secondsElapsed >= secondsPerUpdate) {
           tick(secondsElapsed);
@@ -159,8 +207,30 @@ public class App extends Application {
     loop.start();
   }
 
-  public static void main(String[] args) {
-    launch(args);
+  private static final double SHOOT_DEBOUNCE = 0.1;
+  private double sinceShootTime = 0;
+
+  private void asteroidsShoot(double dt) {
+    /** "Early return" if the precondition for shooting,
+     * whether the corresponding key (X) is held,
+     * is not met.
+     */
+    if (!heldKeys.contains(KeyCode.X)) {
+      return;
+    }
+
+    if (asteroids.isPresent()) {
+      sinceShootTime += dt;
+
+      if (sinceShootTime >= SHOOT_DEBOUNCE) {
+        sinceShootTime = 0;
+
+        Rigidbody rigidbody = swerve.getRigidbody();
+        asteroids
+          .get()
+          .shoot(rigidbody, rigidbody.getHeadingVector().rescale(0.3));
+      }
+    }
   }
 
   private void handleKeyReleased(KeyEvent keyEvent) {
@@ -169,5 +239,9 @@ public class App extends Application {
 
   private void handleKeyPressed(KeyEvent keyEvent) {
     heldKeys.add(keyEvent.getCode());
+  }
+
+  public static void main(String[] args) {
+    launch(args);
   }
 }

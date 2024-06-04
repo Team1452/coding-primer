@@ -4,8 +4,9 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
 import swervevisualizer.Constants.Drivebase;
 import swervevisualizer.Constants.Field;
+import swervevisualizer.asteroids.Asteroids;
 
-public class Swerve extends Entity {
+public class Swerve {
 
   private final double track = Drivebase.trackMeters;
   private final double wheelbase = Drivebase.wheelbaseMeters;
@@ -26,8 +27,6 @@ public class Swerve extends Entity {
   };
 
   private final Rigidbody rigidbody = new Rigidbody(
-    // Rigidbody is a child of Swerve.
-    this,
     // Starts in the center of the field
     new Vector2(Field.WIDTH_METERS / 2, Field.HEIGHT_METERS / 2),
     // Faces 0 degrees
@@ -37,16 +36,11 @@ public class Swerve extends Entity {
     Drivebase.momentOfInertia
   );
 
-  public Swerve(Entity parent) {
-    super(parent);
-  }
-
   public Rigidbody getRigidbody() {
     return rigidbody;
   }
 
-  @Override
-  public void drawLocal(GraphicsContext ctx) {
+  public void draw(GraphicsContext ctx) {
     ctx.save();
 
     // Draw with swerve at (0, 0)
@@ -62,6 +56,16 @@ public class Swerve extends Entity {
     ctx.setLineWidth(0.03);
 
     // Body
+    Shape shape = new Shape.Rectangle(wheelbase, track);
+
+    if (Asteroids.instance != null) {
+      if (
+        Asteroids.instance.collidesWithAsteroids(shape, rigidbody.getPosition())
+      ) {
+        ctx.setStroke(Color.RED);
+      }
+    }
+
     ctx.strokeRect(-track / 2, -wheelbase / 2, track, wheelbase);
 
     // Arrow to indicate heading
@@ -123,8 +127,7 @@ public class Swerve extends Entity {
     }
   }
 
-  @Override
-  public void updateLocal(double dt) {
+  public void update(double dt) {
     for (int i = 0; i < modules.length; i++) {
       Vector2 position = modulePositions[i];
       SwerveModule module = modules[i];
