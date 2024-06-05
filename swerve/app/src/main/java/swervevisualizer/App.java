@@ -1,6 +1,6 @@
-package swervevisualizer;
+package swerve;
 
-import static swervevisualizer.Constants.*;
+import static swerve.Constants.*;
 
 import java.util.HashSet;
 import java.util.Optional;
@@ -12,16 +12,18 @@ import javafx.scene.canvas.*;
 import javafx.scene.control.CheckBox;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
-import swervevisualizer.Constants.Drivebase;
-import swervevisualizer.Constants.Field;
-import swervevisualizer.asteroids.Asteroids;
+import swerve.Constants.Drivebase;
+import swerve.Constants.Field;
+import swerve.asteroids.Asteroids;
 
 public class App extends Application {
 
   private static final double secondsPerUpdate = 1 / 60;
 
   private Swerve swerve = new Swerve();
+  private boolean destroyed = false;
 
   // Asteroids are toggleable, so at each tick
   // we either have and work with an existing Asteroids object,
@@ -40,12 +42,17 @@ public class App extends Application {
     {
       setLayoutX(10);
       setLayoutY(90);
-      setSelected(true);
+      setSelected(false);
     }
   };
 
   // Variables for tracking what keys are held
   private Set<KeyCode> heldKeys = new HashSet<KeyCode>();
+
+  private boolean isSwerveEnabled() {
+    boolean disabled = asteroids.isPresent() && destroyed;
+    return !disabled;
+  }
 
   private boolean holding(KeyCode key) {
     return heldKeys.contains(key);
@@ -61,7 +68,7 @@ public class App extends Application {
     if (holding(KeyCode.D)) targetVelocity.plusEquals(new Vector2(1, 0));
 
     targetVelocity =
-      targetVelocity.normalize().times(Drivebase.MAX_SPEED_METERS_PER_SECOND);
+      targetVelocity.rescale(Drivebase.MAX_SPEED_METERS_PER_SECOND);
 
     double targetAngularVelocity = 0;
     if (holding(KeyCode.E)) targetAngularVelocity +=
@@ -75,15 +82,16 @@ public class App extends Application {
   }
 
   private void update(double dt) {
-    drive();
-    asteroidsShoot(dt);
-
-    swerve.update(dt);
+    if (isSwerveEnabled()) {
+      drive();
+      swerve.update(dt);
+    }
 
     boolean enableAsteroids = asteroidsCheckbox.selectedProperty().get();
     if (enableAsteroids) {
       if (asteroids.isEmpty()) {
         asteroids = Optional.of(new Asteroids());
+        destroyed = false;
       }
     } else {
       if (asteroids.isPresent()) {
@@ -92,7 +100,26 @@ public class App extends Application {
     }
 
     if (asteroids.isPresent()) {
+      asteroids.get().setTicking(isSwerveEnabled());
       asteroids.get().update(dt);
+
+      boolean hitAsteroid = asteroids
+        .get()
+        .collidesWithAsteroids(
+          Drivebase.SHAPE,
+          swerve.getRigidbody().getPosition()
+        );
+      if (!destroyed && hitAsteroid) {
+        asteroids
+          .get()
+          .addDestroyedSegments(
+            Drivebase.SHAPE.edges(),
+            swerve.getRigidbody().getPosition(),
+            swerve.getRigidbody().getVelocity(),
+            -swerve.getRigidbody().getHeadingRadians()
+          );
+        destroyed = true;
+      }
     }
   }
 
@@ -113,7 +140,9 @@ public class App extends Application {
 
     ctx.clearRect(0, 0, Field.WIDTH_METERS, Field.HEIGHT_METERS);
 
-    swerve.draw(ctx);
+    if (isSwerveEnabled()) {
+      swerve.draw(ctx);
+    }
 
     if (asteroids.isPresent()) {
       asteroids.get().draw(ctx);
@@ -142,6 +171,19 @@ public class App extends Application {
       10,
       60
     );
+
+    ctx.save();
+
+    if (asteroids.isPresent()) {
+      ctx.setTextAlign(TextAlignment.RIGHT);
+      ctx.fillText(
+        String.valueOf(asteroids.get().getScore()),
+        SCREEN_WIDTH - 10,
+        20
+      );
+    }
+
+    ctx.restore();
   }
 
   private void tick(double dt) {
@@ -207,30 +249,9 @@ public class App extends Application {
     loop.start();
   }
 
-  private static final double SHOOT_DEBOUNCE = 0.1;
-  private double sinceShootTime = 0;
-
-  private void asteroidsShoot(double dt) {
-    /** "Early return" if the precondition for shooting,
-     * whether the corresponding key (X) is held,
-     * is not met.
-     */
-    if (!heldKeys.contains(KeyCode.X)) {
-      return;
-    }
-
-    if (asteroids.isPresent()) {
-      sinceShootTime += dt;
-
-      if (sinceShootTime >= SHOOT_DEBOUNCE) {
-        sinceShootTime = 0;
-
-        Rigidbody rigidbody = swerve.getRigidbody();
-        asteroids
-          .get()
-          .shoot(rigidbody, rigidbody.getHeadingVector().rescale(0.3));
-      }
-    }
+  private void asteroidsShoot() {
+    Rigidbody rigidbody = swerve.getRigidbody();
+    asteroids.get().shoot(rigidbody, rigidbody.getHeadingVector().rescale(0.3));
   }
 
   private void handleKeyReleased(KeyEvent keyEvent) {
@@ -239,6 +260,26 @@ public class App extends Application {
 
   private void handleKeyPressed(KeyEvent keyEvent) {
     heldKeys.add(keyEvent.getCode());
+
+    switch (keyEvent.getCode()) {
+      case KeyCode.X:
+        {
+          if (asteroids.isPresent() && isSwerveEnabled()) {
+            asteroidsShoot();
+          }
+          break;
+        }
+      case KeyCode.R:
+        {
+          asteroids.get().setScore(0);
+          destroyed = false;
+          break;
+        }
+      default:
+        {
+          break;
+        }
+    }
   }
 
   public static void main(String[] args) {

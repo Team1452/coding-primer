@@ -38,5 +38,5 @@ java {
 
 application {
     // Define the main class for the application.
-    mainClass = 'swervevisualizer.App'
+    mainClass = 'swerve.App'
 }

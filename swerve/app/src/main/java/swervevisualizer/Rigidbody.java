@@ -1,4 +1,4 @@
-package swervevisualizer;
+package swerve;
 
 import javafx.scene.canvas.GraphicsContext;
 

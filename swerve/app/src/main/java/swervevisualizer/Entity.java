@@ -1,4 +1,4 @@
-package swervevisualizer;
+package swerve;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,20 +28,48 @@ import javafx.scene.canvas.GraphicsContext;
  */
 public abstract class Entity {
 
-  public class Rotation {
+  public static class Rotation {
 
-    double radians;
+    Vector2 heading;
 
-    public Rotation(double radians) {
-      this.radians = radians;
+    Rotation(double radians) {
+      this.heading = Vector2.fromPolar(radians, 1);
+    }
+
+    Rotation(Vector2 heading) {
+      this.heading = heading;
+    }
+
+    public static Rotation fromRadians(double radians) {
+      return new Rotation(radians);
+    }
+
+    public static Rotation fromDegrees(double degrees) {
+      return new Rotation(Math.toRadians(degrees));
+    }
+
+    public Rotation minus(Rotation other) {
+      return rotateBy(other.unaryMinus());
+    }
+
+    public Rotation rotateBy(Rotation rotation) {
+      return new Rotation(heading.rotate(rotation.getRadians()));
+    }
+
+    public Rotation unaryMinus() {
+      return new Rotation(heading.unaryMinus());
+    }
+
+    public Vector2 getHeading() {
+      return heading;
     }
 
     public double getRadians() {
-      return radians;
+      return heading.angle();
     }
 
     public double getDegrees() {
-      return Math.toDegrees(radians);
+      return Math.toDegrees(heading.angle());
     }
   }
 
@@ -50,12 +78,24 @@ public abstract class Entity {
     public Rotation rotation;
     public Vector2 translation;
 
+    public Transform(Vector2 translation, Rotation rotation) {
+      this.rotation = rotation;
+      this.translation = translation;
+    }
+
     public void setRotation(Rotation rotation) {
       this.rotation = rotation;
     }
 
     public void setTranslation(Vector2 translation) {
       this.translation = translation;
+    }
+
+    public Transform relativeTo(Transform other) {
+      return new Transform(
+        translation.minus(other.translation),
+        rotation.minus(other.rotation)
+      );
     }
 
     public Rotation getRotation() {
@@ -66,9 +106,8 @@ public abstract class Entity {
       return translation;
     }
 
-    public void transform(GraphicsContext ctx) {
-      ctx.rotate(rotation.getDegrees());
-      ctx.translate(translation.x, translation.y);
+    public Vector2 apply(Vector2 vector) {
+      return vector.plus(translation).rotate(rotation.getRadians());
     }
   }
 
@@ -76,7 +115,9 @@ public abstract class Entity {
   List<Entity> children = new ArrayList<>();
   private boolean active = true;
 
-  public abstract Transform getTransform();
+  public Transform getTransform() {
+    return new Transform(new Vector2(0, 0), Rotation.fromRadians(0));
+  }
 
   public boolean isActive() {
     return active;
@@ -154,11 +195,22 @@ public abstract class Entity {
 
   public void draw(GraphicsContext ctx) {
     if (active) {
+      ctx.save();
+
+      Transform transform = getTransform();
+      Vector2 translation = transform.getTranslation();
+      Rotation rotation = transform.getRotation();
+
+      ctx.translate(translation.x, translation.y);
+      ctx.rotate(rotation.getRadians());
+
       this.drawLocal(ctx);
 
       for (Entity entity : children) {
         entity.draw(ctx);
       }
+
+      ctx.restore();
     }
   }
 }

@@ -1,4 +1,4 @@
-package swervevisualizer;
+package swerve;
 
 import java.util.List;
 import javafx.scene.canvas.GraphicsContext;
@@ -74,6 +74,42 @@ public abstract class Shape {
     }
   }
 
+  public static class Line extends Shape {
+
+    private Vector2 start, end;
+
+    public Line(Vector2 start, Vector2 end) {
+      this.start = start;
+      this.end = end;
+    }
+
+    public Vector2 getStart() {
+      return start;
+    }
+
+    public Vector2 getEnd() {
+      return end;
+    }
+
+    public void setStart(Vector2 start) {
+      this.start = start;
+    }
+
+    public void setEnd(Vector2 end) {
+      this.end = end;
+    }
+
+    @Override
+    public boolean hit(double localX, double localY) {
+      return false;
+    }
+
+    @Override
+    public Edges edges() {
+      return new Edges(List.of(start, end));
+    }
+  }
+
   /** Returns whether given x, y coordinates
    * (implicitly relative or "local" to the shape's *center*) are inside.
    */
@@ -95,7 +131,7 @@ public abstract class Shape {
 
   /** Returns whether two lines, (a, b) -> (c, d) and (p, q) -> (r, q), intersect.
    * Where does it come from? Linear algebra! You can define a matrix that maps
-   * "line space" to "world space", then apply it to the offset of one from another
+   * "line space" to "world space", then apply it to the offset of (p, q) from (a, b)
    * to get the intersection point (if it exists) in "line space". If its two new
    * line coordinates, lambda and gamma, are actually on both line segments
    * (both are between 0 and 1) then the intersection point is on both line segments.
@@ -195,7 +231,7 @@ public abstract class Shape {
        * point must be inside the polygon.
        * https://en.wikipedia.org/wiki/Point_in_polygon
        */
-      Vector2 rayStart = new Vector2(localX - 1000, localY - 1000);
+      Vector2 rayStart = new Vector2(localX - 10_000, localY - 10_000);
       Vector2 rayEnd = new Vector2(localX, localY);
 
       int hits = 0;

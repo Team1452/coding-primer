@@ -1,4 +1,4 @@
-package swervevisualizer;
+package swerve;
 
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Paint;
@@ -7,9 +7,17 @@ public class Vector2 {
 
   public double x, y;
 
-  public Vector2(double x, double y) {
+  private boolean angleDirty;
+  private double angle;
+
+  public void update(double x, double y) {
     this.x = x;
     this.y = y;
+    angleDirty = true;
+  }
+
+  public Vector2(double x, double y) {
+    update(x, y);
   }
 
   public static Vector2 fromPolar(double radius, double theta) {
@@ -18,6 +26,10 @@ public class Vector2 {
 
   public static Vector2 unitCircle(double theta) {
     return new Vector2(Math.cos(theta), Math.sin(theta));
+  }
+
+  public Vector2 unaryMinus() {
+    return new Vector2(-x, -y);
   }
 
   public double dot(Vector2 other) {
@@ -33,13 +45,16 @@ public class Vector2 {
   }
 
   public Vector2 plusEquals(Vector2 other) {
-    x += other.x;
-    y += other.y;
+    update(x + other.x, y + other.y);
     return this;
   }
 
   public Vector2 times(double scalar) {
     return new Vector2(x * scalar, y * scalar);
+  }
+
+  public Vector2 divide(double scalar) {
+    return new Vector2(x / scalar, y / scalar);
   }
 
   public double crossZ(Vector2 other) {
@@ -60,7 +75,13 @@ public class Vector2 {
   }
 
   public double angle() {
-    return Math.atan2(y, x);
+    // Only calculate the angle
+    // if we have to (if x and y have
+    // changed since last call.)
+    if (angleDirty) {
+      angle = Math.atan2(y, x);
+    }
+    return angle;
   }
 
   public Vector2 ninetyCounterClockwise() {

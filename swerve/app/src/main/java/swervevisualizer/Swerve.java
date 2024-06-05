@@ -1,15 +1,14 @@
-package swervevisualizer;
+package swerve;
 
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
-import swervevisualizer.Constants.Drivebase;
-import swervevisualizer.Constants.Field;
-import swervevisualizer.asteroids.Asteroids;
+import swerve.Constants.Drivebase;
+import swerve.Constants.Field;
 
 public class Swerve {
 
-  private final double track = Drivebase.trackMeters;
-  private final double wheelbase = Drivebase.wheelbaseMeters;
+  private final double track = Drivebase.TRACK_METERS;
+  private final double wheelbase = Drivebase.WHEELBASE_METERS;
 
   private Vector2 centerOfRotation = new Vector2(0, 0);
 
@@ -32,8 +31,8 @@ public class Swerve {
     // Faces 0 degrees
     Math.toRadians(0),
     // Some made up physics constants
-    Drivebase.massKg,
-    Drivebase.momentOfInertia
+    Drivebase.MASS_KG,
+    Drivebase.MOMENT_OF_INERTIA
   );
 
   public Rigidbody getRigidbody() {
@@ -56,16 +55,6 @@ public class Swerve {
     ctx.setLineWidth(0.03);
 
     // Body
-    Shape shape = new Shape.Rectangle(wheelbase, track);
-
-    if (Asteroids.instance != null) {
-      if (
-        Asteroids.instance.collidesWithAsteroids(shape, rigidbody.getPosition())
-      ) {
-        ctx.setStroke(Color.RED);
-      }
-    }
-
     ctx.strokeRect(-track / 2, -wheelbase / 2, track, wheelbase);
 
     // Arrow to indicate heading

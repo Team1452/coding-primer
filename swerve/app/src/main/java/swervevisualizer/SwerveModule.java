@@ -1,22 +1,22 @@
-package swervevisualizer;
+package swerve;
 
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
-import swervevisualizer.Constants.Drivebase;
-import swervevisualizer.Constants.PID;
+import swerve.Constants.Drivebase;
+import swerve.Constants.PID;
 
 public class SwerveModule {
 
   private final PIDController steerPid = new PIDController(
-    PID.steerP,
-    PID.steerI,
-    PID.steerD
+    PID.STEER_P,
+    PID.STEER_I,
+    PID.STEER_D
   );
 
   private final PIDController drivePid = new PIDController(
-    PID.driveP,
-    PID.driveI,
-    PID.driveD
+    PID.DRIVE_P,
+    PID.DRIVE_I,
+    PID.DRIVE_D
   );
 
   private Vector2 velocity = new Vector2(0, 0);
@@ -34,11 +34,11 @@ public class SwerveModule {
   }
 
   private static double metersToRotationsPerSecond(double meters) {
-    return meters / Drivebase.wheelCircumference;
+    return meters / Drivebase.WHEEL_CIRCUMFERENCE;
   }
 
   private static double rotationsPerSecondToMeters(double rotations) {
-    return rotations * Drivebase.wheelCircumference;
+    return rotations * Drivebase.WHEEL_CIRCUMFERENCE;
   }
 
   public void update(double dt) {
@@ -52,12 +52,12 @@ public class SwerveModule {
     double steering = steerPid.calculate(headingAngle, targetHeadingAngle);
     headingAngle =
       Utils.angleModulusRadians(
-        headingAngle + Drivebase.steeringGearRatio * steering * dt
+        headingAngle + Drivebase.STEERING_GEAR_RATIO * steering * dt
       );
 
     double targetSpeedRotations = metersToRotationsPerSecond(targetSpeed);
     double driving = drivePid.calculate(speedRotations, targetSpeedRotations);
-    speedRotations += Drivebase.drivingGearRatio * driving * dt;
+    speedRotations += Drivebase.DRIVING_GEAR_RATIO * driving * dt;
 
     velocity =
       Vector2.fromPolar(

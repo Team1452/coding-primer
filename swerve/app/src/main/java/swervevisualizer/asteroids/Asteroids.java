@@ -1,23 +1,24 @@
-package swervevisualizer.asteroids;
+package swerve.asteroids;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.paint.Color;
-import swervevisualizer.Constants.Field;
-import swervevisualizer.Rigidbody;
-import swervevisualizer.Shape;
-import swervevisualizer.Shape.Edges;
-import swervevisualizer.Shape.Polygon;
-import swervevisualizer.Shape.Rectangle;
-import swervevisualizer.Vector2;
+import swerve.Constants.Field;
+import swerve.Rigidbody;
+import swerve.Shape;
+import swerve.Shape.Edges;
+import swerve.Shape.Line;
+import swerve.Shape.Polygon;
+import swerve.Vector2;
 
 /** Encapsulates the (extraneous) "Asteroids" logic!
  * Manages both an array of "Asteroids"
  * and pellets, that can be shot from anywhere on the field.
  */
 public class Asteroids {
+
+  private static final int SCORE_PER_ASTEROID = 100;
 
   /** The difference between a base/abstract class and an interface
    * is that a class can extend ("be") only one base class, but can
@@ -29,6 +30,62 @@ public class Asteroids {
 
   interface HasPosition {
     public abstract Vector2 getPosition();
+  }
+
+  class DestroyedSegment implements HasPosition, HasShape {
+
+    private Line line;
+    private Vector2 position, velocity;
+
+    private static double BLAST_SPEED = 10;
+
+    @Override
+    public Vector2 getPosition() {
+      return position;
+    }
+
+    @Override
+    public Shape getShape() {
+      return line;
+    }
+
+    public DestroyedSegment(Line line, Vector2 position, Vector2 velocity) {
+      Vector2 middle = line.getStart().plus(line.getEnd()).divide(2);
+      Vector2 blast = middle.rescale(BLAST_SPEED);
+
+      this.position = position.plus(middle);
+      this.velocity = velocity.plus(blast);
+
+      /** Center the given line so that (0, 0) is the middle of line,
+       * rather than the center of the entity that line came from,
+       * so .getPosition() returns the center of the line in world space.
+       */
+      Line centeredLine = new Line(
+        line.getStart().minus(middle),
+        line.getEnd().minus(middle)
+      );
+      this.line = centeredLine;
+    }
+
+    public void update(double dt) {
+      position = position.plus(velocity.times(dt));
+    }
+
+    public void draw(GraphicsContext ctx) {
+      ctx.save();
+
+      ctx.translate(position.x, position.y);
+
+      ctx.setLineWidth(0.03);
+      ctx.strokeLine(
+        line.getStart().x,
+        line.getStart().y,
+        line.getEnd().x,
+        line.getEnd().y
+      );
+
+      ctx.restore();
+    }
   }
 
   class Asteroid implements HasShape, HasPosition {
@@ -69,34 +126,6 @@ public class Asteroids {
 
     public void draw(GraphicsContext ctx) {
       ctx.save();
-
-      boolean intersects = false;
-
-      for (Asteroid other : asteroids) {
-        if (other == this) {
-          continue;
-        }
-
-        Edges selfEdges = polygon.edges();
-        Edges otherEdges = other.polygon.edges();
-
-        Vector2 otherLocalPosition = other.rigidbody
-          .getPosition()
-          .minus(rigidbody.getPosition());
-
-        intersects =
-          selfEdges.intersects(
-            otherEdges,
-            otherLocalPosition.x,
-            otherLocalPosition.y
-          );
-
-        if (intersects) {
-          break;
-        }
-      }
-
-      ctx.setStroke(intersects ? Color.RED : Color.BLACK);
 
       rigidbody.translate(ctx);
       rigidbody.rotate(ctx);
@@ -156,7 +185,51 @@ public class Asteroids {
 
   private int nAsteroids = 5;
   private List<Asteroid> asteroids = new ArrayList<>();
+  private List<DestroyedSegment> destroyedSegments = new ArrayList<>();
   private List<Pellet> pellets = new ArrayList<>();
+
+  private int score = 0;
+  private boolean ticking = true;
+
+  public void setTicking(boolean ticking) {
+    this.ticking = ticking;
+  }
+
+  public void setScore(int score) {
+    this.score = score;
+  }
+
+  public int getScore() {
+    return score;
+  }
+
+  private void updateArrays(double dt) {
+    for (Asteroid asteroid : asteroids) {
+      asteroid.update(dt);
+    }
+
+    for (DestroyedSegment segment : destroyedSegments) {
+      segment.update(dt);
+    }
+
+    for (Pellet pellet : pellets) {
+      pellet.update(dt);
+    }
+  }
+
+  public void drawArrays(GraphicsContext ctx) {
+    for (Asteroid asteroid : asteroids) {
+      asteroid.draw(ctx);
+    }
+
+    for (DestroyedSegment segment : destroyedSegments) {
+      segment.draw(ctx);
+    }
+
+    for (Pellet pellet : pellets) {
+      pellet.draw(ctx);
+    }
+  }
 
   private final Random random = new Random();
 
@@ -196,13 +269,13 @@ public class Asteroids {
 
     Vector2 position = new Vector2(x, y);
 
-    double mass = 1, momentOfInertia = 1, heading = 0;
+    double mass = 1, MOMENT_OF_INERTIA = 1, heading = 0;
 
     Rigidbody rigidbody = new Rigidbody(
       position,
       heading,
       mass,
-      momentOfInertia
+      MOMENT_OF_INERTIA
     );
 
     // Fling the asteroid toward some point on the field with some rotation
@@ -245,6 +318,24 @@ public class Asteroids {
     return false;
   }
 
+  public void addDestroyedSegments(
+    Edges edges,
+    Vector2 position,
+    Vector2 velocity,
+    double rotationRadians
+  ) {
+    for (int i = 0; i < edges.n(); i++) {
+      Vector2 start = edges.point(i), end = edges.point(i + 1);
+
+      start = start.rotate(rotationRadians);
+      end = end.rotate(rotationRadians);
+
+      Line line = new Line(start, end);
+      DestroyedSegment segment = new DestroyedSegment(line, position, velocity);
+      destroyedSegments.add(segment);
+    }
+  }
+
   private void collidePelletsAndAsteroids() {
     // You have to be careful about removing elements from an array
     // while iterating through it. If you go from the end to the start,
@@ -267,9 +358,16 @@ public class Asteroids {
 
         if (intersect) {
           // Hit!
+          addDestroyedSegments(
+            asteroid.polygon.edges(),
+            asteroid.getPosition(),
+            asteroid.rigidbody.getVelocity(),
+            asteroid.rigidbody.getHeadingRadians()
+          );
           pellets.remove(pelletI);
           asteroids.remove(asteroidI);
           nAsteroidsRemoved += 1;
+          score += SCORE_PER_ASTEROID;
           break;
         }
       }
@@ -281,8 +379,8 @@ public class Asteroids {
   }
 
   /** This function is very well unnecessary
-   * (it's better to copy and paste than to cram
-   * in an awkward abstraction) but I wanted to show
+   * —it's better to copy and paste than to cram
+   * in an awkward abstraction—but I wanted to show
    * some Java type programming. (Which, compared to a
    * fancier language like Haskell, is extremely limited.)
    */
@@ -314,30 +412,22 @@ public class Asteroids {
   public void update(double dt) {
     collidePelletsAndAsteroids();
     removeOutOfBoundsObjects(pellets);
+    removeOutOfBoundsObjects(destroyedSegments);
 
+    // For each asteroid destroyed, spawn a new one.
     int nAsteroidsRemoved = removeOutOfBoundsObjects(asteroids);
-
-    // Add back any destroyed
     for (int i = 0; i < nAsteroidsRemoved; i++) {
       asteroids.add(spawn());
     }
 
-    for (Asteroid asteroid : asteroids) {
-      asteroid.update(dt);
+    if (ticking) {
+      score += 1;
     }
 
-    for (Pellet pellet : pellets) {
-      pellet.update(dt);
-    }
+    updateArrays(dt);
   }
 
   public void draw(GraphicsContext ctx) {
-    for (Asteroid asteroid : asteroids) {
-      asteroid.draw(ctx);
-    }
-
-    for (Pellet pellet : pellets) {
-      pellet.draw(ctx);
-    }
+    drawArrays(ctx);
   }
 }
